@@ -22,7 +22,22 @@ from flask import (
 
 
 BASE_DIRECTORY = Path("/etc/data").resolve()
-TEXT_PREVIEW_LIMIT = 1024 * 1024  # 1 MB
+DEFAULT_TEXT_PREVIEW_LIMIT = 20 * 1024 * 1024  # 20 MB
+
+
+def _determine_preview_limit() -> int:
+    raw_limit = os.getenv("TEXT_PREVIEW_LIMIT_BYTES")
+    if raw_limit is None:
+        return DEFAULT_TEXT_PREVIEW_LIMIT
+    try:
+        parsed = int(raw_limit)
+    except ValueError:
+        return DEFAULT_TEXT_PREVIEW_LIMIT
+    # Keep a reasonable minimum to avoid degenerate values such as zero or negatives.
+    return max(parsed, 1024)
+
+
+TEXT_PREVIEW_LIMIT = _determine_preview_limit()
 
 
 @dataclass
