@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>File Displayer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>File Displayer</h1>
+        <p class="description">Browsing files from <code>{{ base_directory }}</code></p>
+        {% if protected %}
+        <a class="logout" href="{{ url_for('logout') }}">Log out</a>
+        {% endif %}
+    </header>
+    <nav class="breadcrumbs">
+        <a href="{{ url_for('index') }}">Home</a>
+        {% for crumb in breadcrumbs %}
+            <span>/</span>
+            <a href="{{ url_for('index', path=crumb.path) }}">{{ crumb.label }}</a>
+        {% endfor %}
+    </nav>
+
+    {% if parent_rel_path is not none %}
+    <div class="parent-link"><a href="{{ url_for('index', path=parent_rel_path) }}">&larr; Up one level</a></div>
+    {% endif %}
+
+    {% if entries %}
+    <table class="entries">
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th class="size">Size</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for entry in entries %}
+        <tr>
+            <td>
+                {% if entry.is_dir %}
+                <span class="icon">📁</span>
+                <a href="{{ url_for('index', path=entry.rel_path) }}">{{ entry.name }}</a>
+                {% else %}
+                <span class="icon">📄</span>
+                <a href="{{ url_for('view_file', path=entry.rel_path) }}">{{ entry.name }}</a>
+                {% endif %}
+            </td>
+            <td>{% if entry.is_dir %}Directory{% else %}{{ entry.mimetype or 'File' }}{% endif %}</td>
+            <td class="size">{% if entry.size is not none %}{{ entry.size | filesizeformat }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">This directory is empty.</p>
+    {% endif %}
+</div>
+</body>
+</html>

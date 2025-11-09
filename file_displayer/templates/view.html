@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>View File &ndash; {{ rel_path }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    <nav class="breadcrumbs">
+        <a href="{{ url_for('index') }}">Home</a>
+        {% set parent = rel_path.split('/')[:-1] | join('/') %}
+        {% if parent %}
+            <span>/</span>
+            <a href="{{ url_for('index', path=parent) }}">{{ parent }}</a>
+        {% endif %}
+        <span>/</span>
+        <span>{{ rel_path.split('/')[-1] }}</span>
+    </nav>
+
+    <h1>{{ rel_path.split('/')[-1] }}</h1>
+
+    {% if is_image %}
+    <div class="image-preview">
+        <img src="{{ url_for('raw_file', path=rel_path) }}" alt="{{ rel_path }}">
+    </div>
+    {% else %}
+        {% if oversized %}
+            <p class="warning">The file is larger than 1&nbsp;MB. <a href="{{ url_for('raw_file', path=rel_path) }}">Download the file</a> to view it.</p>
+        {% elif content is not none %}
+            <pre class="file-content">{{ content }}</pre>
+        {% else %}
+            <p class="warning">This file could not be displayed. <a href="{{ url_for('raw_file', path=rel_path) }}">Download instead</a>.</p>
+        {% endif %}
+    {% endif %}
+
+    <p><a href="{{ url_for('raw_file', path=rel_path) }}" download>Download file</a></p>
+</div>
+</body>
+</html>
