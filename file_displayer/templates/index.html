@@ -7,12 +7,17 @@
 </head>
 <body>
 <div class="container">
-    <header>
-        <h1>File Displayer</h1>
-        <p class="description">Browsing files from <code>{{ base_directory }}</code></p>
-        {% if protected %}
-        <a class="logout" href="{{ url_for('logout') }}">Log out</a>
-        {% endif %}
+    <header class="page-header">
+        <div>
+            <h1>File Displayer</h1>
+            <p class="description">Browsing files from <code>{{ base_directory }}</code></p>
+        </div>
+        <div class="header-actions">
+            <a class="ghost-button" href="{{ url_for('admin') }}">Admin dashboard</a>
+            {% if protected %}
+            <a class="logout" href="{{ url_for('logout') }}">Log out</a>
+            {% endif %}
+        </div>
     </header>
     <nav class="breadcrumbs">
         <a href="{{ url_for('index') }}">Home</a>
