@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
+import json
 import mimetypes
 import os
+import re
+import subprocess
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterable, List, Optional
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 from flask import (
     Flask,
@@ -23,6 +30,7 @@ from flask import (
 
 BASE_DIRECTORY = Path("/etc/data").resolve()
 DEFAULT_TEXT_PREVIEW_LIMIT = 20 * 1024 * 1024  # 20 MB
+IP_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 
 def _determine_preview_limit() -> int:
@@ -38,6 +46,10 @@ def _determine_preview_limit() -> int:
 
 
 TEXT_PREVIEW_LIMIT = _determine_preview_limit()
+LOG_SOURCES: list[tuple[str, list[str]]] = [
+    ("riesling-site", ["docker", "logs", "--tail", "50", "riesling-site"]),
+    ("nginx-server", ["docker", "logs", "--tail", "20", "nginx-server"]),
+]
 
 
 @dataclass
@@ -47,6 +59,23 @@ class Entry:
     is_dir: bool
     size: Optional[int]
     mimetype: Optional[str]
+
+
+@dataclass
+class LogReport:
+    source: str
+    command: str
+    ips: List[str]
+    error: Optional[str]
+
+
+@dataclass
+class GeoReport:
+    ip: str
+    location: Optional[str]
+    coordinates: Optional[str]
+    org: Optional[str]
+    error: Optional[str]
 
 
 class DirectoryTraversalError(Exception):
@@ -142,6 +171,21 @@ def create_app() -> Flask:
             breadcrumbs=breadcrumbs,
             entries=entries,
             parent_rel_path=parent_rel_path,
+            protected=is_protected(),
+        )
+
+    @app.route("/admin")
+    def admin():
+        if (auth_redirect := enforce_authorization()) is not None:
+            return auth_redirect
+
+        log_reports = _collect_log_reports()
+        geo_reports = _collect_geo_reports(log_reports)
+
+        return render_template(
+            "admin.html",
+            log_reports=log_reports,
+            geo_reports=geo_reports,
             protected=is_protected(),
         )
 
@@ -272,3 +316,102 @@ def _parent_path(rel_path: str) -> Optional[str]:
         return None
     parent = rel.parent
     return str(parent) if str(parent) != "." else ""
+
+
+def _collect_log_reports() -> List[LogReport]:
+    reports: List[LogReport] = []
+    for source, command in LOG_SOURCES:
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            reports.append(
+                LogReport(
+                    source=source,
+                    command=" ".join(command),
+                    ips=[],
+                    error=f"Command failed to run: {exc}",
+                )
+            )
+            continue
+
+        if completed.returncode != 0:
+            message = completed.stderr.strip() or f"Command exited with status {completed.returncode}."
+            reports.append(
+                LogReport(source=source, command=" ".join(command), ips=[], error=message)
+            )
+            continue
+
+        ips = _extract_ips(completed.stdout)
+        reports.append(LogReport(source=source, command=" ".join(command), ips=ips, error=None))
+
+    return reports
+
+
+def _collect_geo_reports(log_reports: Iterable[LogReport]) -> List[GeoReport]:
+    geo_reports: List[GeoReport] = []
+    seen: set[str] = set()
+    for report in log_reports:
+        for ip in report.ips:
+            if ip in seen:
+                continue
+            seen.add(ip)
+            geo_reports.append(_geolocate_ip(ip))
+    return geo_reports
+
+
+def _extract_ips(log_output: str) -> List[str]:
+    seen: set[str] = set()
+    ordered: List[str] = []
+    for match in IP_PATTERN.findall(log_output):
+        try:
+            ip_obj = ipaddress.ip_address(match)
+        except ValueError:
+            continue
+        if not ip_obj.is_global:
+            continue
+        if match in seen:
+            continue
+        seen.add(match)
+        ordered.append(match)
+    return ordered
+
+
+@lru_cache(maxsize=256)
+def _geolocate_ip(ip: str) -> GeoReport:
+    url = f"https://ipapi.co/{ip}/json/"
+    try:
+        with urlrequest.urlopen(url, timeout=3) as response:
+            raw = response.read().decode("utf-8")
+    except urlerror.URLError as exc:  # pragma: no cover - network failures
+        reason = getattr(exc, "reason", None) or getattr(exc, "code", None) or exc
+        return GeoReport(ip=ip, location=None, coordinates=None, org=None, error=str(reason))
+    except Exception as exc:  # pragma: no cover - defensive
+        return GeoReport(ip=ip, location=None, coordinates=None, org=None, error=str(exc))
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return GeoReport(ip=ip, location=None, coordinates=None, org=None, error="Malformed response from geolocation service.")
+
+    if data.get("error"):
+        return GeoReport(ip=ip, location=None, coordinates=None, org=None, error=data.get("reason") or "Lookup failed.")
+
+    country = data.get("country_name") or data.get("country")
+    region = data.get("region") or data.get("region_code") or data.get("state")
+    city = data.get("city")
+    location_parts = [part for part in (city, region, country) if part]
+    location = ", ".join(location_parts) if location_parts else None
+
+    latitude = data.get("latitude") or data.get("lat")
+    longitude = data.get("longitude") or data.get("lon")
+    coordinates = f"{latitude}, {longitude}" if latitude is not None and longitude is not None else None
+
+    org = data.get("org") or data.get("organization") or data.get("asn")
+
+    return GeoReport(ip=ip, location=location, coordinates=coordinates, org=org, error=None)

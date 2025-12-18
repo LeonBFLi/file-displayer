@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+    <header class="page-header">
+        <div>
+            <p class="eyebrow">Administration</p>
+            <h1>Visitor intelligence</h1>
+            <p class="description">Recent IP addresses observed in application and reverse proxy logs, resolved to their likely locations.</p>
+        </div>
+        <div class="header-actions">
+            <a class="ghost-button" href="{{ url_for('index') }}">Back to files</a>
+            {% if protected %}
+            <a class="logout" href="{{ url_for('logout') }}">Log out</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <section class="callout">
+        <div>
+            <h2>How this report is built</h2>
+            <p>Logs are fetched directly from Docker and scanned for public IP addresses before querying a geolocation service.</p>
+        </div>
+        <ul class="command-list">
+            <li><code>docker logs --tail 50 riesling-site</code></li>
+            <li><code>docker logs --tail 20 nginx-server</code></li>
+        </ul>
+    </section>
+
+    <section class="grid">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <p class="eyebrow">Log sources</p>
+                    <h2>IP harvesting</h2>
+                </div>
+                <p class="badge">Live</p>
+            </div>
+            <div class="card-body log-sources">
+                {% for report in log_reports %}
+                <div class="log-report">
+                    <div class="log-report__header">
+                        <div>
+                            <h3>{{ report.source }}</h3>
+                            <p class="muted">Command: <code>{{ report.command }}</code></p>
+                        </div>
+                        <p class="muted">{{ report.ips|length }} IP{{ '' if report.ips|length == 1 else 's' }}</p>
+                    </div>
+
+                    {% if report.error %}
+                        <p class="error">{{ report.error }}</p>
+                    {% elif report.ips %}
+                        <div class="pill-row">
+                        {% for ip in report.ips %}
+                            <span class="pill">{{ ip }}</span>
+                        {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="muted">No public IP addresses detected in the latest log output.</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <p class="eyebrow">Geolocation</p>
+                    <h2>Visitor footprint</h2>
+                </div>
+                <p class="muted">Powered by ipapi.co</p>
+            </div>
+            <div class="card-body">
+                {% if geo_reports %}
+                <div class="table-wrapper">
+                    <table class="entries compact">
+                        <thead>
+                        <tr>
+                            <th>IP address</th>
+                            <th>Location</th>
+                            <th>Coordinates</th>
+                            <th>Network</th>
+                            <th>Status</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for geo in geo_reports %}
+                        <tr>
+                            <td class="mono">{{ geo.ip }}</td>
+                            <td>{{ geo.location or 'Unknown' }}</td>
+                            <td class="mono">{{ geo.coordinates or '—' }}</td>
+                            <td>{{ geo.org or '—' }}</td>
+                            <td>
+                                {% if geo.error %}
+                                    <span class="pill danger">Lookup failed</span>
+                                {% else %}
+                                    <span class="pill success">Resolved</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p class="muted">No public IP addresses were found in the recent log sample. Check back after new traffic arrives.</p>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+</div>
+</body>
+</html>
