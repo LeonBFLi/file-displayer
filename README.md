@@ -42,7 +42,7 @@ Run the container, forwarding port 8888, mounting the directory you want to expo
 ```bash
 docker run \
   -p 8888:8888 \
-  -v /path/on/host:/etc/data:ro \
+  -v /var/nextchat:/etc/data:ro \
   -e CODE=11995331 \
   file-displayer:latest
 ```
