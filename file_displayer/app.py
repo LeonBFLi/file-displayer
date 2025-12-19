@@ -47,8 +47,8 @@ def _determine_preview_limit() -> int:
 
 TEXT_PREVIEW_LIMIT = _determine_preview_limit()
 LOG_SOURCES: list[tuple[str, Path, int]] = [
-    ("NextChat visitor log", Path("/var/nextchat/visitor_logs/nextchat.log"), 200),
-    ("1206 visitor log", Path("/var/nextchat/visitor_logs/1206.log"), 200),
+    ("NextChat visitor log", Path("/etc/data/visitor_logs/nextchat.log"), 200),
+    ("1206 visitor log", Path("/etc/data/visitor_logs/1206.log"), 200),
 ]
 
 

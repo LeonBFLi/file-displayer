@@ -47,6 +47,9 @@ docker run -itd \
   file-displayer:latest
 ```
 
+The admin dashboard tails visitor log files from `/etc/data/visitor_logs/nextchat.log` and `/etc/data/visitor_logs/1206.log`.
+Mount the directory containing your `visitor_logs` folder at `/etc/data` so those paths resolve inside the container.
+
 Visit [http://localhost:8888](http://localhost:8888) and enter the passcode when prompted.
 
 > **Tip:** The `-v` flag shown above binds the host directory into the container at `/etc/data`. Remove `:ro` if you need write access from the app.
