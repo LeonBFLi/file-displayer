@@ -24,11 +24,11 @@
     <section class="callout">
         <div>
             <h2>How this report is built</h2>
-            <p>Logs are fetched directly from Docker and scanned for public IP addresses before querying a geolocation service.</p>
+            <p>Logs are tailed from on-disk visitor log files and scanned for public IP addresses before querying a geolocation service.</p>
         </div>
         <ul class="command-list">
-            <li><code>docker logs --tail 50 riesling-site</code></li>
-            <li><code>docker logs --tail 20 nginx-server</code></li>
+            <li><code>/etc/data/nextchat.log (tail 200)</code></li>
+            <li><code>/etc/data/1206.log (tail 200)</code></li>
         </ul>
     </section>
 
