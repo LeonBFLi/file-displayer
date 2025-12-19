@@ -399,7 +399,10 @@ def _read_tail(path: Path, max_lines: int) -> str:
 
 @lru_cache(maxsize=256)
 def _geolocate_ip(ip: str) -> GeoReport:
-    url = f"https://ipapi.co/{ip}/json/"
+    url = (
+        "https://ip-api.com/json/"
+        f"{ip}?fields=status,message,country,regionName,city,lat,lon,org"
+    )
     try:
         with urlrequest.urlopen(url, timeout=3) as response:
             raw = response.read().decode("utf-8")
@@ -414,19 +417,25 @@ def _geolocate_ip(ip: str) -> GeoReport:
     except json.JSONDecodeError:
         return GeoReport(ip=ip, location=None, coordinates=None, org=None, error="Malformed response from geolocation service.")
 
-    if data.get("error"):
-        return GeoReport(ip=ip, location=None, coordinates=None, org=None, error=data.get("reason") or "Lookup failed.")
+    if data.get("status") != "success":
+        return GeoReport(
+            ip=ip,
+            location=None,
+            coordinates=None,
+            org=None,
+            error=data.get("message") or "Lookup failed.",
+        )
 
-    country = data.get("country_name") or data.get("country")
-    region = data.get("region") or data.get("region_code") or data.get("state")
+    country = data.get("country")
+    region = data.get("regionName")
     city = data.get("city")
     location_parts = [part for part in (city, region, country) if part]
     location = ", ".join(location_parts) if location_parts else None
 
-    latitude = data.get("latitude") or data.get("lat")
-    longitude = data.get("longitude") or data.get("lon")
+    latitude = data.get("lat")
+    longitude = data.get("lon")
     coordinates = f"{latitude}, {longitude}" if latitude is not None and longitude is not None else None
 
-    org = data.get("org") or data.get("organization") or data.get("asn")
+    org = data.get("org")
 
     return GeoReport(ip=ip, location=location, coordinates=coordinates, org=org, error=None)
