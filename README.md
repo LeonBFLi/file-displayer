@@ -40,7 +40,7 @@ docker build -t file-displayer:latest .
 Run the container, forwarding port 8888, mounting the directory you want to expose, and providing a passcode:
 
 ```bash
-docker run \
+docker run -itd \
   -p 8888:8888 \
   -v /var/nextchat:/etc/data:ro \
   -e CODE=11995331 \
