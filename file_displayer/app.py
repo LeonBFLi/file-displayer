@@ -8,7 +8,7 @@ import json
 import mimetypes
 import os
 import re
-import subprocess
+from collections import deque
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -46,9 +46,9 @@ def _determine_preview_limit() -> int:
 
 
 TEXT_PREVIEW_LIMIT = _determine_preview_limit()
-LOG_SOURCES: list[tuple[str, list[str]]] = [
-    ("riesling-site", ["docker", "logs", "--tail", "50", "riesling-site"]),
-    ("nginx-server", ["docker", "logs", "--tail", "20", "nginx-server"]),
+LOG_SOURCES: list[tuple[str, Path, int]] = [
+    ("NextChat visitor log", Path("/var/nextchat/visitor_logs/nextchat.log"), 200),
+    ("1206 visitor log", Path("/var/nextchat/visitor_logs/1206.log"), 200),
 ]
 
 
@@ -320,35 +320,42 @@ def _parent_path(rel_path: str) -> Optional[str]:
 
 def _collect_log_reports() -> List[LogReport]:
     reports: List[LogReport] = []
-    for source, command in LOG_SOURCES:
+    for source, path, tail_lines in LOG_SOURCES:
         try:
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=10,
-            )
-        except Exception as exc:  # pragma: no cover - defensive
+            log_output = _read_tail(path, tail_lines)
+        except FileNotFoundError:
             reports.append(
                 LogReport(
                     source=source,
-                    command=" ".join(command),
+                    command=str(path),
                     ips=[],
-                    error=f"Command failed to run: {exc}",
+                    error="Log file does not exist.",
+                )
+            )
+            continue
+        except PermissionError:
+            reports.append(
+                LogReport(
+                    source=source,
+                    command=str(path),
+                    ips=[],
+                    error="Insufficient permissions to read the log file.",
+                )
+            )
+            continue
+        except OSError as exc:  # pragma: no cover - defensive
+            reports.append(
+                LogReport(
+                    source=source,
+                    command=str(path),
+                    ips=[],
+                    error=f"Unable to read log file: {exc}",
                 )
             )
             continue
 
-        if completed.returncode != 0:
-            message = completed.stderr.strip() or f"Command exited with status {completed.returncode}."
-            reports.append(
-                LogReport(source=source, command=" ".join(command), ips=[], error=message)
-            )
-            continue
-
-        ips = _extract_ips(completed.stdout)
-        reports.append(LogReport(source=source, command=" ".join(command), ips=ips, error=None))
+        ips = _extract_ips(log_output)
+        reports.append(LogReport(source=source, command=str(path), ips=ips, error=None))
 
     return reports
 
@@ -380,6 +387,14 @@ def _extract_ips(log_output: str) -> List[str]:
         seen.add(match)
         ordered.append(match)
     return ordered
+
+
+def _read_tail(path: Path, max_lines: int) -> str:
+    buffer: deque[str] = deque(maxlen=max_lines)
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            buffer.append(line)
+    return "".join(buffer)
 
 
 @lru_cache(maxsize=256)
